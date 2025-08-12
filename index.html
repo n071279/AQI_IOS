@@ -1,0 +1,468 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IOS尺度 - 関係性測定</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.4.0/p5.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background-color: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 30px;
+        }
+        .participant-info {
+            background-color: #e8f4f8;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+        }
+        .participant-info input {
+            margin: 5px 10px;
+            padding: 5px;
+            border: 1px solid #ccc;
+            border-radius: 3px;
+        }
+        .instruction {
+            background-color: #f0f8e8;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+            text-align: center;
+            font-size: 16px;
+            color: #2c5aa0;
+        }
+        .ios-section {
+            margin: 30px 0;
+            border: 2px solid #ddd;
+            border-radius: 10px;
+            padding: 20px;
+            background-color: #fafafa;
+        }
+        .section-title {
+            text-align: center;
+            font-size: 18px;
+            font-weight: bold;
+            margin-bottom: 15px;
+            color: #333;
+        }
+        .canvas-container {
+            display: flex;
+            justify-content: center;
+            margin: 20px 0;
+        }
+        .result-display {
+            text-align: center;
+            margin-top: 10px;
+            font-size: 14px;
+            color: #666;
+        }
+        .reset-button {
+            display: block;
+            margin: 10px auto;
+            padding: 8px 16px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        .reset-button:hover {
+            background-color: #45a049;
+        }
+        .results-section {
+            margin-top: 40px;
+            padding: 20px;
+            background-color: #f0f8ff;
+            border-radius: 10px;
+        }
+        .save-button {
+            display: block;
+            margin: 20px auto;
+            padding: 12px 24px;
+            background-color: #2196F3;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        .save-button:hover {
+            background-color: #1976D2;
+        }
+        .completion-message {
+            background-color: #d4edda;
+            color: #155724;
+            padding: 15px;
+            border-radius: 5px;
+            margin-top: 20px;
+            text-align: center;
+            display: none;
+        }
+        .timer {
+            text-align: center;
+            color: #666;
+            font-size: 14px;
+            margin-bottom: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>関係性測定 - IOS尺度</h1>
+        
+        <div class="participant-info">
+            <label>参加者ID: <input type="text" id="participant-id" placeholder="例: G00-1"></label>
+            <label>セッション番号: <input type="number" id="session-number" placeholder="1" min="1"></label>
+            <button onclick="startMeasurement()" style="margin-left: 20px; padding: 5px 15px; background-color: #28a745; color: white; border: none; border-radius: 3px; cursor: pointer;">測定開始</button>
+        </div>
+
+        <div id="measurement-area" style="display: none;">
+            <div class="timer" id="timer">経過時間: 00:00</div>
+            
+            <div class="instruction">
+                グループの3人中2人の間の関係について、円をドラッグして重ねることで表現してください。<br>
+                重なりが多いほど関係が親密であることを表します。<br>
+                <strong>すべての測定が完了したら「データを保存」ボタンを押してください。</strong><br>
+                データがダウンロードされたことを確認したら、ブラウザを閉じて頂いて構いません。
+            </div>
+
+            <div class="ios-section">
+                <div class="section-title">ID末尾1の方とID末尾2の方の関係</div>
+                <div class="canvas-container" id="canvas1-container"></div>
+                <button class="reset-button" onclick="resetCanvas(0)">リセット</button>
+            </div>
+
+            <div class="ios-section">
+                <div class="section-title">ID末尾1の方とID末尾3の方の関係</div>
+                <div class="canvas-container" id="canvas2-container"></div>
+                <button class="reset-button" onclick="resetCanvas(1)">リセット</button>
+            </div>
+
+            <div class="ios-section">
+                <div class="section-title">ID末尾2の方とID末尾3の方の関係</div>
+                <div class="canvas-container" id="canvas3-container"></div>
+                <button class="reset-button" onclick="resetCanvas(2)">リセット</button>
+            </div>
+
+            <button class="save-button" onclick="saveData()">データを保存</button>
+            
+            <div class="completion-message" id="completion-message">
+                データが正常に保存されました！<br>
+                ブラウザを閉じ、指示があるまで待機してください。
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 測定開始時刻とタイマー
+        let startTime;
+        let timerInterval;
+        let measurementData = {};
+
+        // 各キャンバスの設定
+        const canvasConfigs = [
+            { container: 'canvas1-container', labels: ['ID末尾1', 'ID末尾2'], circleLabels: ['ID末尾1', 'ID末尾2'], dataKey: '1_2' },
+            { container: 'canvas2-container', labels: ['ID末尾1', 'ID末尾3'], circleLabels: ['ID末尾1', 'ID末尾3'], dataKey: '1_3' },
+            { container: 'canvas3-container', labels: ['ID末尾2', 'ID末尾3'], circleLabels: ['ID末尾2', 'ID末尾3'], dataKey: '2_3' }
+        ];
+
+        let sketches = [];
+
+        function startMeasurement() {
+            const participantId = document.getElementById('participant-id').value.trim();
+            const sessionNumber = document.getElementById('session-number').value;
+            
+            if (!participantId || !sessionNumber) {
+                alert('参加者IDとセッション番号を入力してください。');
+                return;
+            }
+            
+            // 測定開始
+            startTime = new Date();
+            document.getElementById('measurement-area').style.display = 'block';
+            
+            // タイマー開始
+            timerInterval = setInterval(updateTimer, 1000);
+            
+            // 基本情報を記録
+            measurementData.participantId = participantId;
+            measurementData.sessionNumber = sessionNumber;
+            measurementData.startTime = toJST(startTime);
+            
+            // キャンバスを初期化
+            initializeCanvases();
+        }
+
+        function toJST(date) {
+            // 日本標準時（JST）に変換
+            const jstDate = new Date(date.getTime() + (9 * 60 * 60 * 1000)); // UTC+9
+            return jstDate.toISOString().replace('T', ' ').substring(0, 19);
+        }
+
+        function updateTimer() {
+            const elapsed = Math.floor((new Date() - startTime) / 1000);
+            const minutes = Math.floor(elapsed / 60).toString().padStart(2, '0');
+            const seconds = (elapsed % 60).toString().padStart(2, '0');
+            document.getElementById('timer').textContent = `経過時間: ${minutes}:${seconds}`;
+        }
+
+        function initializeCanvases() {
+            // 既存のキャンバスをクリア
+            sketches.forEach(sketch => sketch.remove());
+            sketches = [];
+
+            // 各キャンバスを作成
+            canvasConfigs.forEach((config, index) => {
+                const sketch = createSketch(config, index);
+                const p5Instance = new p5(sketch);
+                sketches.push(p5Instance);
+            });
+        }
+
+        function createSketch(config, index) {
+            const sketch = (p) => {
+                let circle1 = { x: 100, y: 100, radius: 40, dragging: false };
+                let circle2 = { x: 200, y: 100, radius: 40, dragging: false };
+                let overlapRatio = 0;
+                let interactionLog = []; // 操作ログ
+
+                p.setup = function() {
+                    const canvas = p.createCanvas(350, 200);
+                    canvas.parent(config.container);
+                };
+
+                p.draw = function() {
+                    p.background(240);
+                    
+                    // 境界線を描画
+                    p.stroke(150);
+                    p.strokeWeight(1);
+                    p.noFill();
+                    p.rect(0, 0, 350, 200);
+
+                    // 重なり部分を計算して描画
+                    overlapRatio = calculateOverlap(circle1, circle2);
+                    drawOverlap(p, circle1, circle2);
+
+                    // 円を描画
+                    drawCircle(p, circle1, config.circleLabels[0], p.color(100, 150, 255, 150));
+                    drawCircle(p, circle2, config.circleLabels[1], p.color(255, 150, 100, 150));
+
+                    // 結果を更新（データ保存のみ、表示なし）
+                    updateResult(null, null, config.dataKey, overlapRatio);
+                };
+
+                p.mousePressed = function() {
+                    if (isInsideCircle(p.mouseX, p.mouseY, circle1)) {
+                        circle1.dragging = true;
+                        logInteraction('start_drag_circle1', circle1.x, circle1.y);
+                    } else if (isInsideCircle(p.mouseX, p.mouseY, circle2)) {
+                        circle2.dragging = true;
+                        logInteraction('start_drag_circle2', circle2.x, circle2.y);
+                    }
+                };
+
+                p.mouseDragged = function() {
+                    if (circle1.dragging) {
+                        circle1.x = p.constrain(p.mouseX, circle1.radius, 350 - circle1.radius);
+                        circle1.y = p.constrain(p.mouseY, circle1.radius, 200 - circle1.radius);
+                    }
+                    if (circle2.dragging) {
+                        circle2.x = p.constrain(p.mouseX, circle2.radius, 350 - circle2.radius);
+                        circle2.y = p.constrain(p.mouseY, circle2.radius, 200 - circle2.radius);
+                    }
+                };
+
+                p.mouseReleased = function() {
+                    if (circle1.dragging) {
+                        logInteraction('end_drag_circle1', circle1.x, circle1.y);
+                    }
+                    if (circle2.dragging) {
+                        logInteraction('end_drag_circle2', circle2.x, circle2.y);
+                    }
+                    circle1.dragging = false;
+                    circle2.dragging = false;
+                };
+
+                function logInteraction(action, x, y) {
+                    interactionLog.push({
+                        timestamp: new Date().toISOString(),
+                        action: action,
+                        x: x,
+                        y: y,
+                        overlapRatio: overlapRatio
+                    });
+                }
+
+                // データ取得関数を公開
+                sketch.getData = function() {
+                    return {
+                        finalOverlap: overlapRatio,
+                        circle1: { x: circle1.x, y: circle1.y },
+                        circle2: { x: circle2.x, y: circle2.y },
+                        interactions: interactionLog
+                    };
+                };
+            };
+
+            return sketch;
+        }
+
+        function drawCircle(p, circle, label, color) {
+            p.fill(color);
+            p.stroke(0);
+            p.strokeWeight(2);
+            p.ellipse(circle.x, circle.y, circle.radius * 2);
+            
+            // ラベルを描画
+            p.fill(0);
+            p.noStroke();
+            p.textAlign(p.CENTER, p.CENTER);
+            p.textSize(12);
+            p.text(label, circle.x, circle.y);
+        }
+
+        function drawOverlap(p, circle1, circle2) {
+            const distance = p.dist(circle1.x, circle1.y, circle2.x, circle2.y);
+            
+            if (distance < circle1.radius + circle2.radius) {
+                // 重なり部分を強調表示
+                p.fill(255, 255, 0, 100); // 黄色で半透明
+                p.noStroke();
+                
+                if (distance < Math.abs(circle1.radius - circle2.radius)) {
+                    // 一方が他方を完全に含む
+                    const smallerCircle = circle1.radius < circle2.radius ? circle1 : circle2;
+                    p.ellipse(smallerCircle.x, smallerCircle.y, smallerCircle.radius * 2);
+                } else {
+                    // 部分的な重なり - 中間点に重なり領域を描画
+                    const midX = (circle1.x + circle2.x) / 2;
+                    const midY = (circle1.y + circle2.y) / 2;
+                    const overlapSize = (circle1.radius + circle2.radius - distance);
+                    p.ellipse(midX, midY, overlapSize);
+                }
+            }
+        }
+
+        function isInsideCircle(mouseX, mouseY, circle) {
+            const distance = Math.sqrt(Math.pow(mouseX - circle.x, 2) + Math.pow(mouseY - circle.y, 2));
+            return distance < circle.radius;
+        }
+
+        function calculateOverlap(circle1, circle2) {
+            const distance = Math.sqrt(Math.pow(circle1.x - circle2.x, 2) + Math.pow(circle1.y - circle2.y, 2));
+            const r1 = circle1.radius;
+            const r2 = circle2.radius;
+            
+            if (distance >= r1 + r2) {
+                return 0; // 重なりなし
+            }
+            
+            if (distance <= Math.abs(r1 - r2)) {
+                // 一方が他方を完全に含む
+                const smallerArea = Math.PI * Math.pow(Math.min(r1, r2), 2);
+                const totalArea = Math.PI * Math.pow(r1, 2) + Math.PI * Math.pow(r2, 2);
+                return smallerArea / totalArea;
+            }
+            
+            // 部分的な重なりの計算（簡易版）
+            const overlapRatio = Math.max(0, (r1 + r2 - distance) / (r1 + r2));
+            return overlapRatio;
+        }
+
+        function updateResult(resultId, finalId, dataKey, ratio) {
+            // データのみ保存（表示は行わない）
+            measurementData[dataKey] = ratio;
+        }
+
+        function resetCanvas(index) {
+            // より直接的なリセット方法
+            if (sketches[index]) {
+                // p5インスタンスを再作成してリセット
+                sketches[index].remove();
+                
+                // 新しいスケッチを作成
+                const config = canvasConfigs[index];
+                const sketch = createSketch(config, index);
+                const p5Instance = new p5(sketch);
+                sketches[index] = p5Instance;
+            }
+        }
+
+        function saveData() {
+            // 測定完了時刻を記録
+            measurementData.endTime = toJST(new Date());
+            measurementData.totalDuration = Math.floor((new Date() - startTime) / 1000);
+            
+            // 各キャンバスの詳細データを取得
+            sketches.forEach((sketch, index) => {
+                if (sketch.getData) {
+                    measurementData[`canvas_${index}_data`] = sketch.getData();
+                }
+            });
+            
+            // CSVファイルとしてダウンロード
+            const csvContent = convertToCSV(measurementData);
+            downloadCSV(csvContent, `ios_data_${measurementData.participantId}_${measurementData.sessionNumber}.csv`);
+            
+            // 完了メッセージを表示
+            document.getElementById('completion-message').style.display = 'block';
+            
+            // タイマーを停止
+            clearInterval(timerInterval);
+        }
+
+        function convertToCSV(data) {
+            const headers = [
+                'participant_id', 'session_number', 'start_time', 'end_time', 'total_duration_seconds',
+                '1_2_overlap', '1_3_overlap', '2_3_overlap',
+                '1_2_circle1_x', '1_2_circle1_y', '1_2_circle2_x', '1_2_circle2_y',
+                '1_3_circle1_x', '1_3_circle1_y', '1_3_circle2_x', '1_3_circle2_y',
+                '2_3_circle1_x', '2_3_circle1_y', '2_3_circle2_x', '2_3_circle2_y'
+            ];
+            
+            const values = [
+                data.participantId, data.sessionNumber, data.startTime, data.endTime, data.totalDuration,
+                data['1_2']?.toFixed(3) || 0, data['1_3']?.toFixed(3) || 0, data['2_3']?.toFixed(3) || 0,
+                data.canvas_0_data?.circle1.x || 0, data.canvas_0_data?.circle1.y || 0,
+                data.canvas_0_data?.circle2.x || 0, data.canvas_0_data?.circle2.y || 0,
+                data.canvas_1_data?.circle1.x || 0, data.canvas_1_data?.circle1.y || 0,
+                data.canvas_1_data?.circle2.x || 0, data.canvas_1_data?.circle2.y || 0,
+                data.canvas_2_data?.circle1.x || 0, data.canvas_2_data?.circle1.y || 0,
+                data.canvas_2_data?.circle2.x || 0, data.canvas_2_data?.circle2.y || 0
+            ];
+            
+            return headers.join(',') + '\n' + values.join(',');
+        }
+
+        function downloadCSV(csvContent, filename) {
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            if (link.download !== undefined) {
+                const url = URL.createObjectURL(blob);
+                link.setAttribute('href', url);
+                link.setAttribute('download', filename);
+                link.style.visibility = 'hidden';
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            }
+        }
+    </script>
+</body>
+</html>
